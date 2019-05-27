@@ -1,0 +1,5 @@
+argh
+pathlib2
+pandas>=0.24.2
+ipython
+filelike
