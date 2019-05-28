@@ -34,8 +34,8 @@ DATA_FILE_DESCRIPTORS = [
     _DataFileDescriptor(name='application', file_name='application*.*sv', fields=[("userid", str, True), ("uuid", 'Int64', True), ("applicationname", str, True), ("cpu_usage", numpy.float64, True), ("packagename", str, True), ("packageuid", 'Int64', True), ("uidrxbytes", 'Int64', True), ("uidrxpackets", 'Int64', True), ("uidtxbytes", 'Int64', True), ("uidtxpackets", 'Int64', True), ("cguest_time", 'Int64', True), ("cmaj_flt", 'Int64', True), ("cstime", 'Int64', True), ("cutime", 'Int64', True), ("dalvikprivatedirty", 'Int64', True), ("dalvikpss", 'Int64', True), ("dalvikshareddirty", 'Int64', True), ("guest_time", 'Int64', True), ("importance", 'Int64', True), ("importancereasoncode", 'Int64', True), ("importancereasonpid", 'Int64', True), ("lru", 'Int64', True), ("nativeprivatedirty", 'Int64', True), ("nativepss", 'Int64', True), ("nativeshareddirty", 'Int64', True), ("num_threads", 'Int64', True), ("otherprivatedirty", 'Int64', True), ("otherpss", 'Int64', True), ("othershareddirty", 'Int64', True), ("pgid", 'Int64', True), ("pid", 'Int64', True), ("ppid", 'Int64', True), ("priority", 'Int64', True), ("rss", 'Int64', True), ("rsslim", 'Int64', True), ("sid", 'Int64', True), ("start_time", 'Int64', True), ("state", str, True), ("stime", 'Int64', True), ("tcomm", str, True), ("utime", 'Int64', True), ("vsize", 'Int64', True), ("version_code", 'Int64', True), ("version_name", str, True), ("sherlock_version", str, True), ("tgpid", 'Int64', True), ("flags", str, True), ("wchan", str, True), ("exit_signal", 'Int64', True), ("minflt", 'Int64', True), ("cminflt", 'Int64', True), ("majflt", 'Int64', True), ("startcode", 'Int64', True), ("endcode", 'Int64', True), ("nice", 'Int64', True), ("itrealvalue", 'Int64', True), ("processor", 'Int64', True), ("rt_priority", 'Int64', True)]),
     _DataFileDescriptor(name='sms', file_name='sms.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('address', str, True), ('containURL', bool, True), ('date', 'Int64', True), ('fromcontacts', bool, True), ('type', 'Int64', True)]),
     _DataFileDescriptor(name='screenon', file_name='screenon.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('screenon', bool, True), ('timtestamp', str, True)] ),
-    _DataFileDescriptor(name='userpresent', file_name='userpresentprobe.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('timestamp', str, True)]),
-    _DataFileDescriptor(name='moriarty', file_name='moriartyprobe.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('version', str, True), ('action', str, True), ('actionType', str, True), ('details', str, True), ('sessionId', numpy.float32, True), ('sessionType', 'str', True), ('behavior', str, True)]),
+    _DataFileDescriptor(name='userpresent', file_name='userpresent*.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('timestamp', str, True)]),
+    _DataFileDescriptor(name='moriarty', file_name='moriarty*.*sv', fields=[('userid', str, True), ('uuid', 'Int64', True), ('version', str, True), ('action', str, True), ('actionType', str, True), ('details', str, True), ('sessionId', numpy.float32, True), ('sessionType', 'str', True), ('behavior', str, True)]),
 ]
 
 LOG = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def _normalize_commas(text):
         return mo.group(0).replace(',', '_')
     return PARENTHESIS_PATTERN.sub(_remove_commas, text)
 
-def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional[List[str]] = None, usecols=None) -> pandas.DataFrame:
+def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional[List[str]] = None, usecols=None, iterator=False) -> pandas.DataFrame:
     """
 
     :param fpath: path of csv file to load
@@ -56,35 +56,42 @@ def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional
     :param usecols: optional list of columns to load
     :return: DataFrame read from csv
     """
+    if fpath.suffix.lower() == '.csv':
+        f = fpath.open('r', encoding='utf8')
+        f = filelike.wrappers.translate.Translate(f, _normalize_commas)
+        header = f.readline().lower().replace('\ufeff', '').strip() #strip utf8 marker
+        header_fields = header.split(',')
+        field_to_type = {name : t for (name, t, _) in dfd.fields}
+        reader = pandas.read_csv(
+            f,
+            sep=',',
+            iterator=True,
+            header=None,
+            skiprows=1,
+            names=header_fields,
+            dtype=field_to_type,
+            chunksize=1024
+        )
+    elif fpath.suffix.lower() == '.tsv':
+        f = fpath.open('r', encoding='latin1')
+        reader = pandas.read_csv(f, sep='\t', header=None,
+                                 names=[x[0] for x in dfd.fields] if not usecols else usecols,
+                                 usecols=dfd.relevant_field_names() if not usecols else usecols,
+                                 dtype=dfd.type_mappings(), iterator=True, chunksize=1024)
+    else:
+        raise ValueError( f'{fpath} has unsupported extension: {fpath.suffix}')
 
-    f = fpath.open('r')
-    try:
-        if fpath.suffix.lower() == '.csv':
-            f = filelike.wrappers.translate.Translate(f, _normalize_commas)
-            reader = pandas.read_csv(
-                f,
-                sep=',',
-                iterator=True,
-                encoding='utf8',
-            )
-        elif fpath.suffix.lower() == '.tsv':
-            reader = pandas.read_csv(f, sep='\t', header=None,
-                                     names=[x[0] for x in dfd.fields] if not usecols else usecols,
-                                     usecols=dfd.relevant_field_names() if not usecols else usecols,
-                                     dtype=dfd.type_mappings(), iterator=True, encoding='windows-1252')
-        else:
-            raise ValueError( f'{fpath} has unsupported extension: {fpath.suffix}')
-
-        if user_ids:
-            df = pandas.concat((chunk[chunk.userid.isin(user_ids)] for chunk in reader))
-        else:
-            df = pandas.concat(reader)
-
-        df['source'] = dfd.name
-    finally:
-        f.close()
-
-    return df
+    if not iterator:
+        try:
+            if user_ids:
+                df = pandas.concat((chunk[chunk.userid.isin(user_ids)] for chunk in reader))
+            else:
+                df = pandas.concat(reader)
+        finally:
+            f.close()
+        return df
+    #else
+    return reader
 
 def _write_csv(df: pandas.DataFrame, target_file_name: str):
     df.to_csv(target_file_name, sep='\t', index=False)
@@ -95,10 +102,13 @@ def _enum_relevant_data_files(dirpath: pathlib2.Path):
             LOG.warning(f'{dfd} has no fields defined, skipping')
             continue
 
-        fpath = next(dirpath.glob(dfd.file_name))  #We assume there's exactly one
+        try:
+            fpath = next(dirpath.glob(dfd.file_name))  #We assume there's exactly one
+        except StopIteration:
+            continue
         yield fpath, dfd
 
-def _load(dirname: str, user_ids: Optional[List[str]] = None) -> pandas.DataFrame:
+def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> pandas.DataFrame:
     dirpath = pathlib2.Path(dirname)
 
     if user_ids:
@@ -106,19 +116,17 @@ def _load(dirname: str, user_ids: Optional[List[str]] = None) -> pandas.DataFram
 
     df: pandas.DataFrame = None
 
+    data_frames = {}
+
     for fpath, dfd in _enum_relevant_data_files(dirpath):
-        LOG.debug(f'Loading {dfd} from {fpath}')
-        cur_df = _read_csv(fpath, dfd, user_ids)
+        LOG.debug(f'Loading {dfd} from {fpath} (iterator={iterator})')
+        cur_df = _read_csv(fpath, dfd, user_ids, iterator=iterator)
+        data_frames[dfd.name] = cur_df
 
-        if df is None:
-            df = cur_df
-        else:
-            df = df.append(cur_df, ignore_index=True, sort=False)
+    return data_frames
 
-    return df
-
-def load_shell(dirname: str, user_ids: Optional[List[str]] = None) -> pandas.DataFrame:
-    df = _load(dirname, user_ids)
+def load_shell(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> pandas.DataFrame:
+    dfs = _load(dirname, user_ids, iterator)
     from IPython import embed; embed()
 
 def list_users(dirname: str):
