@@ -70,6 +70,7 @@ def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional
             skiprows=1,
             names=header_fields,
             dtype=field_to_type,
+            usecols=usecols,
             chunksize=1024
         )
     elif fpath.suffix.lower() == '.tsv':
@@ -108,7 +109,7 @@ def _enum_relevant_data_files(dirpath: pathlib2.Path):
             continue
         yield fpath, dfd
 
-def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> pandas.DataFrame:
+def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> dict
     dirpath = pathlib2.Path(dirname)
 
     if user_ids:
@@ -132,24 +133,24 @@ def load_shell(dirname: str, user_ids: Optional[List[str]] = None, iterator=Fals
 def list_users(dirname: str):
     users = set()
     for fpath, dfd in _enum_relevant_data_files(pathlib2.Path(dirname)):
-        df = _read_csv(fpath, dfd, user_ids=None, usecols=['userid'])
-        for uid in df['userid'].unique():
-            users.add(uid)
+        for df in _read_csv(fpath, dfd, user_ids=None, usecols=['userid'], iterator=True):
+            for uid in df['userid'].unique():
+                users.add(uid)
 
     return users
 
-def gather_and_split_users(src_dir: str, target_dir: str = None):
-    src_path = pathlib2.Path(src_dir)
-    if not target_dir:
-        target_dir = src_path.name
-    target_path = pathlib2.Path(target_dir)
-
-    df = _load(src_dir)
-    target_path.mkdir(exist_ok=True)
-
-    for user_id, user_df in df.groupby('userid'):
-        target_file_path = target_path.joinpath(f'{user_id}.tsv')
-        _write_csv(user_df, str(target_file_path))
+# def gather_and_split_users(src_dir: str, target_dir: str = None):
+#     src_path = pathlib2.Path(src_dir)
+#     if not target_dir:
+#         target_dir = src_path.name
+#     target_path = pathlib2.Path(target_dir)
+#
+#     df = _load(src_dir)
+#     target_path.mkdir(exist_ok=True)
+#
+#     for user_id, user_df in df.groupby('userid'):
+#         target_file_path = target_path.joinpath(f'{user_id}.tsv')
+#         _write_csv(user_df, str(target_file_path))
 
 def _split_csv_users(csv_file_path: pathlib2.Path, target_file_name_prefix: str):
     reader = pandas.read_csv(str(csv_file_path),
