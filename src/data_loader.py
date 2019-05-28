@@ -109,7 +109,7 @@ def _enum_relevant_data_files(dirpath: pathlib2.Path):
             continue
         yield fpath, dfd
 
-def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> dict
+def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> dict:
     dirpath = pathlib2.Path(dirname)
 
     if user_ids:
