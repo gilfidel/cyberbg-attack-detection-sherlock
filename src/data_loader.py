@@ -127,10 +127,23 @@ def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) ->
     return data_frames
 
 def load_shell(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> pandas.DataFrame:
+    """
+    Load all relevant csv/tsv files into pandas dataframes into a dict indexed by data file type (see DATA_FILE_DESCRIPTORS)
+    open an ipython shell to interactively play with the data
+    :param dirname:
+    :param user_ids:
+    :param iterator:
+    :return:
+    """
     dfs = _load(dirname, user_ids, iterator)
     from IPython import embed; embed()
 
 def list_users(dirname: str):
+    """
+    List all unique user ids found in relevant csv/tsv files in given dir
+    :param dirname:
+    :return:
+    """
     users = set()
     for fpath, dfd in _enum_relevant_data_files(pathlib2.Path(dirname)):
         for df in _read_csv(fpath, dfd, user_ids=None, usecols=['userid'], iterator=True):
@@ -166,6 +179,12 @@ def _split_csv_users(csv_file_path: pathlib2.Path, target_file_name_prefix: str)
             user_df.to_csv(f'{target_file_name_prefix}-{user_id}.tsv', sep='\t', mode='a', header=False)
 
 def split_users(csv_file_name: str, target_dir: str = None):
+    """
+    Split given csv/tsv file to different files - one for each userid, put results in given target dir
+    :param csv_file_name:
+    :param target_dir:
+    :return:
+    """
     src_path = pathlib2.Path(csv_file_name)
     if not target_dir:
         target_dir = pathlib2.Path(f'{src_path.parent.name}')
@@ -175,6 +194,12 @@ def split_users(csv_file_name: str, target_dir: str = None):
     _split_csv_users(src_path, str(target_path.joinpath(src_path.stem)))
 
 def split_users_in_dir(dir_name: str, target_dir: str = None):
+    """
+    Split all csv/tsv files in dir_name by user
+    :param dir_name:
+    :param target_dir:
+    :return:
+    """
     src_dir_path = pathlib2.Path(dir_name)
     if not target_dir:
         target_dir = src_dir_path.name
