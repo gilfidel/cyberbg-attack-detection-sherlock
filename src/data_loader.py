@@ -47,7 +47,7 @@ def _normalize_commas(text):
         return mo.group(0).replace(',', '_')
     return PARENTHESIS_PATTERN.sub(_remove_commas, text)
 
-def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional[List[str]] = None, usecols=None, iterator=False) -> pandas.DataFrame:
+def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional[List[str]] = None, usecols=None, iterator=False, chunksize=None) -> pandas.DataFrame:
     """
 
     :param fpath: path of csv file to load
@@ -71,7 +71,7 @@ def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional
             names=header_fields,
             dtype=field_to_type,
             usecols=usecols,
-            chunksize=1024
+            chunksize=chunksize
         )
     elif fpath.suffix.lower() == '.tsv':
         f = fpath.open('r', encoding='latin1')
@@ -134,13 +134,13 @@ def _load(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) ->
 
     return data_frames
 
-def load_data_file(dirpath: pathlib2.Path, file_type: str, usecols=None, iterator=False):
+def load_data_file(dirpath: pathlib2.Path, file_type: str, usecols=None, iterator=False, chunksize=None):
     if isinstance(usecols, str):
         usecols = [x.strip() for x in usecols.split(',')]
 
     dfd = DATA_FILE_DESCRIPTORS[file_type]
     fpath = _find_data_file(dirpath, dfd)
-    return _read_csv(fpath, dfd, usecols=usecols, iterator=iterator)
+    return _read_csv(fpath, dfd, usecols=usecols, iterator=iterator, chunksize=chunksize)
 
 def load_shell(dirname: str, user_ids: Optional[List[str]] = None, iterator=False) -> pandas.DataFrame:
     """

@@ -22,6 +22,9 @@ APPLICATION_EXFIL_FIELDS = ['userid', 'uuid', 'packagename', 'uidrxbytes', 'uidr
 
 DURATION_AND_SIZE_PATTERN = re.compile(r'Successful send to server\(duration \[msec\]_size \[bytes\]\);(\d+);(\d+)')
 
+
+MORIARTY_PACKAGENAME = 'com.bgu.sherlock.Moriarty'
+
 def _extract_send_duration_and_size(details_text: str):
     #Successful send to server(duration [msec]_size [bytes]);604;27
     mo = DURATION_AND_SIZE_PATTERN.match(details_text)
@@ -65,7 +68,7 @@ def extract_exfil_data( dataset_dir_name: str, target_dir: str ):
     :param target_dir:
     :return:
     """
-    src_application_reader = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'application', usecols=APPLICATION_EXFIL_FIELDS, iterator=True)
+    src_application_reader = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'application', usecols=APPLICATION_EXFIL_FIELDS, iterator=True, chunksize=10*1024)
 
     target_dir_path = pathlib2.Path(target_dir)
 
