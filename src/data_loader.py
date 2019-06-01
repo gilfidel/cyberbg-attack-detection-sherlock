@@ -94,7 +94,7 @@ def _read_csv(fpath: pathlib2.Path, dfd: _DataFileDescriptor, user_ids: Optional
     #else
     return reader
 
-def _append_csv(df: pandas.DataFrame, target_file_name: str):
+def append_csv(df: pandas.DataFrame, target_file_name: str):
     df.to_csv(target_file_name, sep='\t', index=False, header=not pathlib2.Path(target_file_name).exists(), mode='a')
 
 def _enum_relevant_data_files(dirpath: pathlib2.Path):
@@ -179,7 +179,7 @@ def list_users(dirname: str):
 #
 #     for user_id, user_df in df.groupby('userid'):
 #         target_file_path = target_path.joinpath(f'{user_id}.tsv')
-#         _append_csv(user_df, str(target_file_path))
+#         append_csv(user_df, str(target_file_path))
 
 def _split_csv_users(csv_file_path: pathlib2.Path, target_file_name_prefix: str):
     reader = pandas.read_csv(str(csv_file_path),
@@ -205,7 +205,7 @@ def split_users(csv_file_name: str, target_dir: str = None):
     if not target_dir:
         target_dir = pathlib2.Path(f'{src_path.parent.name}')
     target_path = pathlib2.Path(target_dir)
-    target_path.mkdir(exist_ok=True)
+    target_path.mkdir(parents=True,exist_ok=True)
 
     _split_csv_users(src_path, str(target_path.joinpath(src_path.stem)))
 
@@ -220,7 +220,7 @@ def split_users_in_dir(dir_name: str, target_dir: str = None):
     if not target_dir:
         target_dir = src_dir_path.name
     target_path = pathlib2.Path(target_dir)
-    target_path.mkdir(exist_ok=True)
+    target_path.mkdir(parents=True,exist_ok=True)
 
     for src_file_path in src_dir_path.iterdir():
         if src_file_path.match('*.tsv'):

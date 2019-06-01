@@ -3,11 +3,12 @@ import os
 import logging
 
 import functools
-import pathlib2
 import inspect
 import six
 import re
+import csv
 
+import pathlib2
 import pandas
 import numpy
 import argh
@@ -45,31 +46,56 @@ def _enum_malicious_send_data_time_intervals(moriarty_df: pandas.DataFrame):
         send_duration, send_size = _extract_send_duration_and_size(r.details)
         start_time = end_time - send_duration
 
-        yield (r.userid, start_time, end_time)
+        yield (r.userid, start_time, end_time, send_size)
 
-def extract_exfil_related_data( dataset_dir_name: str, target_file_name: str ):
-    src_reader = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'application', usecols=APPLICATION_EXFIL_FIELDS, iterator=True)
+EXFIL_DATA_NETWORKING = 'networking.tsv'
+EXFIL_DATA_MALICIOUS = 'malicious.tsv'
 
-    target_file_path = pathlib2.Path(target_file_name)
-    target_file_path.parent.mkdir(exist_ok=True)
+EXFIL_DATA_SEP = '\t'
 
-    LOG.debug( f'Extracting data to: {target_file_path}')
+def extract_exfil_data( dataset_dir_name: str, target_dir: str ):
+    """
+    Preprocesses a sherlock dataset in _dataset_dir_name_ and narrows it down into a dataset for malicious data exfiltration:
+        - creates a subfolder for each unique user id
+        - in each such subfolder:
+            + creates a filtered application.csv file only containing networking related data
+            + creates a malicious.csv file with intervals of sending malicious data
 
-    for df in src_reader:
-        data_loader._append_csv(df, str(target_file_path))
+    :param dataset_dir_name:
+    :param target_dir:
+    :return:
+    """
+    src_application_reader = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'application', usecols=APPLICATION_EXFIL_FIELDS, iterator=True)
 
-def run( dataset_dir_name: str ):
-    app_reader = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'application', usecols=APPLICATION_EXFIL_FIELDS, iterator=True)
+    target_dir_path = pathlib2.Path(target_dir)
+
+    for df in src_application_reader:
+        for userid, user_df in df.groupby('userid'):
+            target_file_path = target_dir_path.joinpath(userid, EXFIL_DATA_NETWORKING)
+            target_file_path.parent.mkdir(parents=True,exist_ok=True)
+            data_loader.append_csv(user_df, str(target_file_path))
+
     moriarty_df = data_loader.load_data_file(pathlib2.Path(dataset_dir_name), 'moriarty')
+    for userid, user_mor_df in moriarty_df.groupby('userid'):
+        target_file_path = target_dir_path.joinpath(userid, EXFIL_DATA_MALICIOUS)
+        target_file_path.parent.mkdir(parents=True,exist_ok=True)
+        with target_file_path.open('w', newline='') as fout:
+            csv_writer = csv.writer(fout, 'excel', delimiter=EXFIL_DATA_SEP)
+            csv_writer.writerow(['userid', 'start_time', 'end_time', 'size'])
+            csv_writer.writerows(_enum_malicious_send_data_time_intervals(user_mor_df))
 
-    malicious_sends = _enum_malicious_send_data_time_intervals(moriarty_df)
+def load_exfil_data(exfil_data_dir: str):
+    exfil_data_dir_path = pathlib2.Path(exfil_data_dir)
 
-    ms = list(malicious_sends)
+    networking_data_reader = pandas.read_csv(str(exfil_data_dir_path.joinpath(EXFIL_DATA_NETWORKING)), sep=EXFIL_DATA_SEP, iterator=True, chunksize=4096)
+    mal_df = pandas.read_csv(str(exfil_data_dir_path.joinpath(EXFIL_DATA_MALICIOUS)), sep=EXFIL_DATA_SEP, iterator=False)
+
+    return networking_data_reader, mal_df
+
+def shell(exfil_data_dir: str):
+    networking_data_reader, mal_df = load_exfil_data(exfil_data_dir)
     from IPython import embed; embed()
 
-    # for df_chunk in app_reader:
-    #     for userid, user_df in df_chunk.group():
-    #         pass
 
 def _main():
     utils.init_logging(os.path.join('logs', 'exfil_detector'))
